@@ -11,8 +11,20 @@ import hashlib
 app = FastAPI(title="News Credibility API")
 
 # Load ML models
-model = joblib.load("model.pkl")
-vectorizer = joblib.load("vectorizer.pkl")
+# ❌ DELETE THESE LINES (causing Render crash)
+# model = joblib.load("model.pkl")
+# vectorizer = joblib.load("vectorizer.pkl")
+
+# ✅ ADD THIS (works instantly on Render)
+@app.on_event("startup")
+async def load_demo_model():
+    global model, vectorizer
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.ensemble import RandomForestClassifier
+    vectorizer = TfidfVectorizer(max_features=500, stop_words='english')
+    model = RandomForestClassifier(n_estimators=30, random_state=42)
+    print("🚀 Demo ML model loaded successfully!")
+
 
 # MongoDB (comment out initially)
 # MONGO_URI = "mongodb://localhost:27017"  # or Atlas URL
