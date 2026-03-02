@@ -1,0 +1,55 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+import joblib
+import numpy as np
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
+from datetime import datetime
+
+app = FastAPI(title="News Credibility API")
+
+# Load ML models
+model = joblib.load("model.pkl")
+vectorizer = joblib.load("vectorizer.pkl")
+
+# MongoDB (comment out initially)
+# MONGO_URI = "mongodb://localhost:27017"  # or Atlas URL
+# client = AsyncIOMotorClient(MONGO_URI)
+# db = client.newsDB
+# collection = db.predictions
+
+class NewsRequest(BaseModel):
+    text: str
+
+@app.post("/predict")
+async def predict(news: NewsRequest):
+    # Preprocess text
+    text_tfidf = vectorizer.transform([news.text.lower()])
+    prediction = model.predict(text_tfidf)[0]
+    probas = model.predict_proba(text_tfidf)[0]
+    confidence = float(np.max(probas))
+    
+    # ✅ FIXED: 3-state prediction with uncertainty
+    if confidence < 0.80:
+        return {
+            "prediction": "UNCERTAIN",
+            "confidence": round(confidence, 3),
+            "message": "Low confidence - verify with multiple sources"
+        }
+    elif confidence < 0.90:
+        return {
+            "prediction": "LIKELY_" + ("REAL" if prediction == 1 else "FAKE"),
+            "confidence": round(confidence, 3),
+            "message": "Moderate confidence"
+        }
+    else:
+        return {
+            "prediction": "REAL" if prediction == 1 else "FAKE",
+            "confidence": round(confidence, 3),
+            "message": "High confidence"
+        }
+
+
+@app.get("/")
+def root():
+    return {"message": "News Credibility API is running!"}
