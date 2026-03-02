@@ -5,7 +5,9 @@ import numpy as np
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 from datetime import datetime
-
+from fastapi import HTTPException
+from pydantic import BaseModel
+import hashlib
 app = FastAPI(title="News Credibility API")
 
 # Load ML models
@@ -20,6 +22,34 @@ vectorizer = joblib.load("vectorizer.pkl")
 
 class NewsRequest(BaseModel):
     text: str
+
+# Simple in-memory users (production = database)
+users_db = {}
+
+class User(BaseModel):
+    email: str
+    password: str
+
+@app.post("/register")
+async def register(user: User):
+    if user.email in users_db:
+        raise HTTPException(status_code=400, detail="Email exists")
+    
+    # Hash password (production = bcrypt)
+    hashed = hashlib.sha256(user.password.encode()).hexdigest()
+    users_db[user.email] = hashed
+    return {"message": "User created"}
+
+@app.post("/login")
+async def login(user: User):
+    if user.email not in users_db:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    hashed = hashlib.sha256(user.password.encode()).hexdigest()
+    if users_db[user.email] != hashed:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    return {"message": "Login success", "token": "fake-jwt-token"}
 
 @app.post("/predict")
 async def predict(news: NewsRequest):
